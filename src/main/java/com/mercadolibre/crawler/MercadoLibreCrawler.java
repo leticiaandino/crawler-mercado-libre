@@ -1,11 +1,16 @@
 package com.mercadolibre.crawler;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mercadolibre.model.Categoria;
+import com.mercadolibre.model.ImagenProducto;
 import com.mercadolibre.model.Producto;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -18,34 +23,76 @@ import java.util.regex.Pattern;
 @Component
 public class MercadoLibreCrawler implements Crawler {
 
+    private static final Logger logger = LoggerFactory.getLogger(MercadoLibreCrawler.class);
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public Producto crawlProducto(String url) {
         try {
+            url = url.trim(); // Limpiar URL
             Document doc = Jsoup.connect(url).userAgent(USER_AGENT).get();
+            logger.debug("URL final cargada por Jsoup: {}", doc.location());
 
-            // SKU: Ej: MLA19813486
-            String sku = extractSkuFromUrl(url);
-
-            // Nombre
-            String nombre = doc.select("h1.ui-pdp-title").text();
-
-            // Precios
-            String precioActualStr = doc.select("span.andes-money-amount__fraction").first().text();
-            BigDecimal precioActual = new BigDecimal(precioActualStr.replace(".", "").replace(",", "."));
-
-            String precioAnteriorStr = doc.select("span.andes-money-amount__previous-price").text();
-            BigDecimal precioAnterior = null;
-            if (!precioAnteriorStr.isEmpty()) {
-                precioAnterior = new BigDecimal(precioAnteriorStr.replace(".", "").replace(",", "."));
+            // Extraer JSON del script __PRELOADED_STATE__
+            Element jsonElement = doc.selectFirst("script#__PRELOADED_STATE__");
+            if (jsonElement == null) {
+                throw new RuntimeException("No se encontró el JSON __PRELOADED_STATE__ en la página");
             }
+
+            String jsonData = jsonElement.data();
+            JsonNode root = objectMapper.readTree(jsonData);
+            JsonNode pageState = root.path("pageState").path("initialState");
+
+            // SKU: usar el de la URL original
+            String sku = extractSkuFromUrl(url);
+            logger.debug("SKU extraído de la URL: {}", sku);
+
+            // Nombre: desde el título
+            String nombre = pageState.path("components").path("header").path("title").asText();
+            logger.debug("Nombre extraído: {}", nombre);
+
+            // Precios: desde el componente price
+            JsonNode priceComponent = pageState.path("components").path("price").path("price");
+            BigDecimal precioActual = null;
+            BigDecimal precioAnterior = null;
+
+            if (priceComponent.has("value")) {
+                precioActual = new BigDecimal(priceComponent.path("value").asText());
+            }
+            if (priceComponent.has("original_value")) {
+                precioAnterior = new BigDecimal(priceComponent.path("original_value").asText());
+            }
+            logger.debug("Precio actual extraído: {} (anterior: {})", precioActual, precioAnterior);
 
             // Disponibilidad
             String disponibilidad = "en_stock";
-            if (doc.select("span.ui-pdp-buybox__quantity-label").isEmpty()) {
+            JsonNode availableQty = pageState.path("components").path("available_quantity");
+            if (availableQty.path("picker").path("description").asText().contains("Sin stock")) {
                 disponibilidad = "agotado";
             }
+
+            // Imágenes: solo desde la galería principal (evitar vertical_gallery u otros duplicados)
+            java.util.Set<String> seenIds = new java.util.LinkedHashSet<>();
+            List<String> imagenesUrls = new ArrayList<>();
+
+            // Extraer solo del primer "gallery" explícito bajo components
+            JsonNode galleryNode = pageState.path("components").path("gallery");
+            if (!galleryNode.isMissingNode()) {
+                JsonNode pictures = galleryNode.path("pictures");
+                if (pictures.isArray()) {
+                    for (JsonNode picture : pictures) {
+                        String id = picture.path("id").asText("").trim();
+                        if (!id.isEmpty() && seenIds.add(id)) { // add() devuelve false si ya existía
+                            String cleanId = id.replaceAll("\\s+", "");
+                            String imgUrl = "https://http2.mlstatic.com/D_NQ_NP_" + cleanId + "-O.webp";
+                            imagenesUrls.add(imgUrl);
+                        }
+                    }
+                }
+            }
+
+            logger.debug("Imágenes únicas extraídas: {} URLs", imagenesUrls.size());
 
             Producto producto = new Producto();
             producto.setSku(sku);
@@ -53,11 +100,23 @@ public class MercadoLibreCrawler implements Crawler {
             producto.setPrecioActual(precioActual);
             producto.setPrecioAnterior(precioAnterior);
             producto.setDisponibilidad(disponibilidad);
-            producto.setUrlFicha(url);
+            producto.setUrlFicha(url.trim());
+
+            // Crear objetos ImagenProducto
+            List<ImagenProducto> imagenes = new ArrayList<>();
+            for (int i = 0; i < imagenesUrls.size(); i++) {
+                ImagenProducto imagen = new ImagenProducto();
+                imagen.setUrlImagen(imagenesUrls.get(i));
+                imagen.setOrden(i + 1);
+                imagen.setProducto(producto);
+                imagenes.add(imagen);
+            }
+            producto.setImagenes(imagenes);
 
             return producto;
 
-        } catch (IOException e) {
+        } catch (Exception e) {
+            logger.error("Error al extraer datos: {}", e.getMessage());
             throw new RuntimeException("Error al scrapear producto: " + url, e);
         }
     }
@@ -130,11 +189,21 @@ public class MercadoLibreCrawler implements Crawler {
     }
 
     private String extractSkuFromUrl(String url) {
-        Pattern pattern = Pattern.compile("/p/(\\w+)");
+        url = url.trim();
+        // Patrón mejorado para URLs como: /p/MLA19813486
+        Pattern pattern = Pattern.compile("/p/(MLA[A-Z0-9]+)");
         Matcher matcher = pattern.matcher(url);
         if (matcher.find()) {
-            return matcher.group(1); // Ej: MLA19813486
+            return matcher.group(1);
         }
-        return "UNKNOWN_SKU";
+        
+        // Patrón alternativo: /MLA19813486
+        pattern = Pattern.compile("/(MLA[A-Z0-9]+)");
+        matcher = pattern.matcher(url);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        
+        return "UNKNOWN_SKU_" + System.currentTimeMillis();
     }
 }

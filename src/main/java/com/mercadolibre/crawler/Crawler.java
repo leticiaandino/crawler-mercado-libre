@@ -1,6 +1,11 @@
 package com.mercadolibre.crawler;
 
-public class Crawler {
+import com.mercadolibre.model.Categoria;
+import com.mercadolibre.model.Producto;
+
+import java.util.List;
+
+public interface Crawler {
     // Extrae un solo producto desde su URL
     Producto crawlProducto(String url);
 
