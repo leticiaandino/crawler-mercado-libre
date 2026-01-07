@@ -1,7 +1,10 @@
 package com.mercadolibre.controller;
 
+import com.mercadolibre.model.Categoria;
 import com.mercadolibre.model.Producto;
 import com.mercadolibre.service.CrawlerService;
+
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,15 +69,53 @@ public class CrawlerController {
     }
 
     @PostMapping("/categoria")
-    public ResponseEntity<String> crawlCategoria(@RequestParam String url) {
+    public ResponseEntity<?> crawlCategoria(@RequestBody String url) {
+        String cleanUrl = "";
         try {
-            logger.info("Iniciando extracción de categoría: {}", url);
-            crawlerService.extraerListadoProductos(url);
-            logger.info("Categoría procesada exitosamente: {}", url);
-            return ResponseEntity.ok("Categoría procesada exitosamente");
+            if (url == null || url.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("Error: URL requerida en el body");
+            }
+
+            cleanUrl = url.trim().replace("\"", "");
+            logger.info("Iniciando extracción de categoría: {}", cleanUrl);
+
+            // 1. Metadata
+            Categoria categoria = crawlerService.obtenerMetadataCategoria(cleanUrl);
+
+            // 2. Proceso pesado (scraping + persistencia)
+            List<Producto> productos = crawlerService.extraerListadoProductos(cleanUrl);
+
+            logger.info("Categoría procesada exitosamente: {} productos extraídos", productos.size());
+
+            // 3. Respuesta liviana (NO devolver lista)
+            var response = new java.util.HashMap<String, Object>();
+            response.put("success", true);
+            response.put("message", "Categoría procesada exitosamente");
+            response.put("data", new java.util.HashMap<String, Object>() {{
+                put("categoria", new java.util.HashMap<String, Object>() {{
+                    put("ruta", categoria.getRuta());
+                    put("urlCategoria", categoria.getUrlCategoria());
+                    put("cantidadPaginas", categoria.getCantidadPaginas());
+                    put("productosPorPagina", categoria.getProductosPorPagina());
+                }});
+                put("resultado", new java.util.HashMap<String, Object>() {{
+                    put("productosExtraidos", productos.size());
+                    put("productosPersistidos", productos.size());
+                    put("estado", "COMPLETADO");
+                }});
+            }});
+
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
-            logger.error("Error al procesar categoría: {}", url, e);
-            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+            logger.error("Error al procesar categoría: {}", cleanUrl, e);
+
+            var errorResponse = new java.util.HashMap<String, Object>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("estado", "ERROR");
+
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 }
