@@ -34,5 +34,11 @@ public class Categoria {
     @Column(name = "fecha_actualizacion")
     private Instant fechaActualizacion;
 
+    @PrePersist
+    @PreUpdate
+    public void updateTimestamp() {
+        this.fechaActualizacion = Instant.now();
+    }
+
 
 }
