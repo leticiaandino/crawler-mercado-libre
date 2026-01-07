@@ -70,12 +70,31 @@ public class MercadoLibreCrawler implements Crawler {
             }
             logger.debug("Precio actual extraído: {} (anterior: {})", precioActual, precioAnterior);
 
-            // Disponibilidad
+            // Disponibilidad: extraer desde HTML ya que no está en JSON
             String disponibilidad = "en_stock";
-            JsonNode availableQty = pageState.path("components").path("available_quantity");
-            if (availableQty.path("picker").path("description").asText().contains("Sin stock")) {
-                disponibilidad = "agotado";
+            
+            // Buscar "¡Última disponible!" en el HTML
+            Element ultimaDisponible = doc.selectFirst("span:contains(¡Última disponible!)");
+            if (ultimaDisponible != null) {
+                disponibilidad = "ultima_unidad";
+                logger.debug("Detectado: última unidad disponible");
+            } else {
+                // Buscar "Stock disponible"
+                Element stockDisponible = doc.selectFirst("span:contains(Stock disponible)");
+                if (stockDisponible != null) {
+                    disponibilidad = "stock_disponible";
+                    logger.debug("Detectado: stock disponible");
+                } else {
+                    // Buscar indicadores de sin stock
+                    Element sinStock = doc.selectFirst("span:contains(Sin stock), span:contains(No disponible)");
+                    if (sinStock != null) {
+                        disponibilidad = "agotado";
+                        logger.debug("Detectado: producto agotado");
+                    }
+                }
             }
+            
+            logger.debug("Disponibilidad final determinada: {}", disponibilidad);
 
             // Imágenes: solo desde la galería principal (evitar vertical_gallery u otros duplicados)
             java.util.Set<String> seenIds = new java.util.LinkedHashSet<>();

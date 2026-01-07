@@ -33,7 +33,7 @@ public class Producto {
     private BigDecimal precioAnterior;
 
     @Column(name = "disponibilidad", nullable = false, length = 50)
-    private String disponibilidad = "en_stock";
+    private String disponibilidad = "stock_disponible"; // Valores: stock_disponible, ultima_unidad, agotado
 
     @Lob
     @Column(name = "url_ficha", nullable = false)
