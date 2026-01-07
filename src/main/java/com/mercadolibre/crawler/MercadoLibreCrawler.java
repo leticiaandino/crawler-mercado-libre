@@ -27,10 +27,15 @@ public class MercadoLibreCrawler implements Crawler {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private String normalizeMercadoLibreUrl(String url) {
+        if (url == null) return null;
+        return url.split("[?#]")[0];
+    }
+
     @Override
     public Producto crawlProducto(String url) {
         try {
-            url = url.trim(); // Limpiar URL
+            url = normalizeMercadoLibreUrl(url.trim());
             Document doc = Jsoup.connect(url).userAgent(USER_AGENT).get();
             logger.debug("URL final cargada por Jsoup: {}", doc.location());
 
@@ -100,7 +105,7 @@ public class MercadoLibreCrawler implements Crawler {
             producto.setPrecioActual(precioActual);
             producto.setPrecioAnterior(precioAnterior);
             producto.setDisponibilidad(disponibilidad);
-            producto.setUrlFicha(url.trim());
+            producto.setUrlFicha(url);
 
             // Crear objetos ImagenProducto
             List<ImagenProducto> imagenes = new ArrayList<>();
@@ -189,7 +194,7 @@ public class MercadoLibreCrawler implements Crawler {
     }
 
     private String extractSkuFromUrl(String url) {
-        url = url.trim();
+        url = normalizeMercadoLibreUrl(url.trim());
         // Patrón mejorado para URLs como: /p/MLA19813486
         Pattern pattern = Pattern.compile("/p/(MLA[A-Z0-9]+)");
         Matcher matcher = pattern.matcher(url);
