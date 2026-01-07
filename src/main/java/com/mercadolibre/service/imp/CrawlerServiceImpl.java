@@ -43,14 +43,9 @@ public class CrawlerServiceImpl implements CrawlerService {
             imagenProductoRepository.deleteByProductoId(producto.getId());
         }
 
+        // Guardar producto (las imágenes se guardan automáticamente por CascadeType.ALL)
         Producto savedProducto = productoRepository.save(producto);
         
-        // Guardar imágenes en lote
-        if (producto.getImagenes() != null) {
-            producto.getImagenes().forEach(imagen -> imagen.setProducto(savedProducto));
-            imagenProductoRepository.saveAll(producto.getImagenes());
-        }
-
         return savedProducto;
     }
 
