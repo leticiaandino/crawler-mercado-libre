@@ -214,9 +214,16 @@ public class MercadoLibreCrawler implements Crawler {
 
     private String extractSkuFromUrl(String url) {
         url = normalizeMercadoLibreUrl(url.trim());
-        // Patrón mejorado para URLs como: /p/MLA19813486
+        // Patrón para URLs como: /p/MLA19813486
         Pattern pattern = Pattern.compile("/p/(MLA[A-Z0-9]+)");
         Matcher matcher = pattern.matcher(url);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        
+        // Patrón para URLs como: /up/MLAU266107237
+        pattern = Pattern.compile("/up/(MLAU[A-Z0-9]+)");
+        matcher = pattern.matcher(url);
         if (matcher.find()) {
             return matcher.group(1);
         }
