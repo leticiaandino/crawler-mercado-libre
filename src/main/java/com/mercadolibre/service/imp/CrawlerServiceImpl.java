@@ -1,6 +1,7 @@
 package com.mercadolibre.service.imp;
 
 import com.mercadolibre.crawler.MercadoLibreCrawler;
+import com.mercadolibre.crawler.ParisCrawler;
 import com.mercadolibre.model.*;
 import com.mercadolibre.repository.*;
 import com.mercadolibre.service.CrawlerService;
@@ -18,6 +19,9 @@ public class CrawlerServiceImpl implements CrawlerService {
 
     @Autowired
     private MercadoLibreCrawler mercadoLibreCrawler;
+    
+    @Autowired
+    private ParisCrawler parisCrawler;
 
     @Autowired
     private ProductoRepository productoRepository;
@@ -33,7 +37,15 @@ public class CrawlerServiceImpl implements CrawlerService {
 
     @Override
     public Producto extraerFichaProducto(String url) {
-        Producto producto = mercadoLibreCrawler.crawlProducto(url);
+        Producto producto;
+        
+        if (url.contains("mercadolibre.com")) {
+            producto = mercadoLibreCrawler.crawlProducto(url);
+        } else if (url.contains("paris.cl")) {
+            producto = parisCrawler.crawlProducto(url);
+        } else {
+            throw new IllegalArgumentException("URL no soportada: " + url);
+        }
 
         // Guardar o actualizar producto
         Optional<Producto> existing = productoRepository.findBySku(producto.getSku());
@@ -51,7 +63,24 @@ public class CrawlerServiceImpl implements CrawlerService {
 
     @Override
     public List<Producto> extraerListadoProductos(String urlCategoria) {
-        Categoria categoria = mercadoLibreCrawler.crawlMetadataCategoria(urlCategoria);
+        Categoria categoria;
+        List<Producto> productos;
+        
+        if (urlCategoria.contains("mercadolibre.com")) {
+            categoria = mercadoLibreCrawler.crawlMetadataCategoria(urlCategoria);
+            productos = mercadoLibreCrawler.crawlListadoProductos(urlCategoria, 1, categoria.getCantidadPaginas());
+        } else if (urlCategoria.contains("paris.cl")) {
+            categoria = parisCrawler.crawlMetadataCategoria(urlCategoria);
+            productos = new ArrayList<>();
+            
+            // Extraer productos de todas las páginas
+            for (int pagina = 1; pagina <= categoria.getCantidadPaginas(); pagina++) {
+                List<Producto> productosPagina = parisCrawler.crawlListadoProductos(urlCategoria, pagina, categoria.getCantidadPaginas());
+                productos.addAll(productosPagina);
+            }
+        } else {
+            throw new IllegalArgumentException("URL de categoría no soportada: " + urlCategoria);
+        }
         
         // Guardar o actualizar categoría
         Optional<Categoria> existingCategoria = categoriaRepository.findByRuta(categoria.getRuta());
@@ -59,8 +88,6 @@ public class CrawlerServiceImpl implements CrawlerService {
             categoria.setId(existingCategoria.get().getId());
         }
         categoria = categoriaRepository.save(categoria);
-
-        List<Producto> productos = mercadoLibreCrawler.crawlListadoProductos(urlCategoria, 1, categoria.getCantidadPaginas());
 
         // Procesar productos en lote
         List<Producto> productosToSave = new ArrayList<>();
@@ -100,6 +127,30 @@ public class CrawlerServiceImpl implements CrawlerService {
 
     @Override
     public Categoria obtenerMetadataCategoria(String urlCategoria) {
-        return mercadoLibreCrawler.crawlMetadataCategoria(urlCategoria);
+        if (urlCategoria.contains("mercadolibre.com")) {
+            return mercadoLibreCrawler.crawlMetadataCategoria(urlCategoria);
+        } else if (urlCategoria.contains("paris.cl")) {
+            return parisCrawler.crawlMetadataCategoria(urlCategoria);
+        } else {
+            throw new IllegalArgumentException("URL de categoría no soportada: " + urlCategoria);
+        }
+    }
+
+    private String normalizeUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            throw new IllegalArgumentException("URL no puede ser nula o vacía");
+        }
+        
+        String normalized = url.trim();
+        
+        // Remover parámetros de tracking de MercadoLibre
+        if (normalized.contains("?pdp_filters")) {
+            normalized = normalized.substring(0, normalized.indexOf("?pdp_filters"));
+        }
+        if (normalized.contains("#polycard_client")) {
+            normalized = normalized.substring(0, normalized.indexOf("#polycard_client"));
+        }
+        
+        return normalized;
     }
 }
