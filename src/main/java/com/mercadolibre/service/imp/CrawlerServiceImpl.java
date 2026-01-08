@@ -5,10 +5,13 @@ import com.mercadolibre.crawler.ParisCrawler;
 import com.mercadolibre.model.*;
 import com.mercadolibre.repository.*;
 import com.mercadolibre.service.CrawlerService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.ArrayList;
@@ -16,6 +19,8 @@ import java.util.ArrayList;
 @Service
 @Transactional
 public class CrawlerServiceImpl implements CrawlerService {
+
+    private static final Logger logger = LoggerFactory.getLogger(CrawlerServiceImpl.class);
 
     @Autowired
     private MercadoLibreCrawler mercadoLibreCrawler;
@@ -63,66 +68,78 @@ public class CrawlerServiceImpl implements CrawlerService {
 
     @Override
     public List<Producto> extraerListadoProductos(String urlCategoria) {
-        Categoria categoria;
-        List<Producto> productos;
+        urlCategoria = urlCategoria.trim(); // ✅ limpiar espacios
+
+        if (!urlCategoria.contains("paris.cl")) {
+            throw new IllegalArgumentException("Solo se soporta crawling de Paris");
+        }
+
+        // 1. Obtener metadata
+        Categoria categoria = parisCrawler.crawlMetadataCategoria(urlCategoria);
+        logger.info("Metadata obtenida del crawler: {} páginas", categoria.getCantidadPaginas());
         
-        if (urlCategoria.contains("mercadolibre.com")) {
-            categoria = mercadoLibreCrawler.crawlMetadataCategoria(urlCategoria);
-            productos = mercadoLibreCrawler.crawlListadoProductos(urlCategoria, 1, categoria.getCantidadPaginas());
-        } else if (urlCategoria.contains("paris.cl")) {
-            categoria = parisCrawler.crawlMetadataCategoria(urlCategoria);
-            productos = new ArrayList<>();
-            
-            // Extraer productos de todas las páginas
-            for (int pagina = 1; pagina <= categoria.getCantidadPaginas(); pagina++) {
-                List<Producto> productosPagina = parisCrawler.crawlListadoProductos(urlCategoria, pagina, categoria.getCantidadPaginas());
-                productos.addAll(productosPagina);
-            }
+        Optional<Categoria> existingCatOpt = categoriaRepository.findByRuta(categoria.getRuta());
+        Categoria savedCategoria;
+        
+        if (existingCatOpt.isPresent()) {
+            savedCategoria = existingCatOpt.get();
+            logger.info("Categoría existente en BD con {} páginas. Actualizando...", savedCategoria.getCantidadPaginas());
+            savedCategoria.setCantidadPaginas(categoria.getCantidadPaginas());
+            savedCategoria.setProductosPorPagina(categoria.getProductosPorPagina());
+            savedCategoria.setUrlCategoria(categoria.getUrlCategoria());
+            savedCategoria = categoriaRepository.save(savedCategoria);
+            logger.info("Categoría actualizada a {} páginas", savedCategoria.getCantidadPaginas());
         } else {
-            throw new IllegalArgumentException("URL de categoría no soportada: " + urlCategoria);
+            savedCategoria = categoriaRepository.save(categoria);
+            logger.info("Nueva categoría guardada con {} páginas", savedCategoria.getCantidadPaginas());
         }
-        
-        // Guardar o actualizar categoría
-        Optional<Categoria> existingCategoria = categoriaRepository.findByRuta(categoria.getRuta());
-        if (existingCategoria.isPresent()) {
-            categoria.setId(existingCategoria.get().getId());
-        }
-        categoria = categoriaRepository.save(categoria);
 
-        // Procesar productos en lote
-        List<Producto> productosToSave = new ArrayList<>();
-        List<ProductoCategoria> relacionesToSave = new ArrayList<>();
-        
-        final Categoria finalCategoria = categoria;
-        productos.forEach(producto -> {
-            Optional<Producto> existingProducto = productoRepository.findBySku(producto.getSku());
-            if (existingProducto.isPresent()) {
-                producto.setId(existingProducto.get().getId());
+        int totalProductosExtraidos = 0;
+
+        // 2. Iterar páginas (0-based)
+        for (int pagina = 0; pagina < savedCategoria.getCantidadPaginas(); pagina++) {
+            logger.info("Extrayendo página {} de {}", pagina, savedCategoria.getCantidadPaginas());
+            List<Producto> productosPagina = parisCrawler.crawlListadoProductos(urlCategoria, pagina, savedCategoria.getCantidadPaginas());
+
+            if (productosPagina.isEmpty()) {
+                logger.warn("Página {} vacía. Deteniendo.", pagina);
+                break;
             }
-            productosToSave.add(producto);
-        });
-        
-        // Guardar productos en lote
-        List<Producto> savedProductos = productoRepository.saveAll(productosToSave);
-        
-        // Crear relaciones producto-categoría en lote
-        savedProductos.forEach(savedProducto -> {
-            ProductoCategoriaId id = new ProductoCategoriaId();
-            id.setProductoId(savedProducto.getId());
-            id.setCategoriaId(finalCategoria.getId());
-            
-            ProductoCategoria productoCategoria = new ProductoCategoria();
-            productoCategoria.setId(id);
-            productoCategoria.setProducto(savedProducto);
-            productoCategoria.setCategoria(finalCategoria);
-            
-            relacionesToSave.add(productoCategoria);
-        });
-        
-        // Guardar relaciones en lote
-        productoCategoriaRepository.saveAll(relacionesToSave);
 
-        return productos;
+            // Guardar productos y relaciones
+            List<Producto> toSave = new ArrayList<>();
+            List<ProductoCategoria> relaciones = new ArrayList<>();
+
+            for (Producto p : productosPagina) {
+                Optional<Producto> existing = productoRepository.findBySku(p.getSku());
+                if (existing.isPresent()) {
+                    p.setId(existing.get().getId());
+                    // Opcional: actualizar campos si cambian
+                }
+                toSave.add(p);
+            }
+
+            List<Producto> savedProductos = productoRepository.saveAll(toSave);
+
+            for (Producto p : savedProductos) {
+                ProductoCategoriaId id = new ProductoCategoriaId();
+                id.setProductoId(p.getId());
+                id.setCategoriaId(savedCategoria.getId());
+
+                ProductoCategoria pc = new ProductoCategoria();
+                pc.setId(id);
+                pc.setProducto(p);
+                pc.setCategoria(savedCategoria);
+                relaciones.add(pc);
+            }
+
+            productoCategoriaRepository.saveAll(relaciones);
+            totalProductosExtraidos += productosPagina.size();
+        }
+
+        logger.info("Extracción completada: {} productos", totalProductosExtraidos);
+        // Devolver lista vacía para evitar sobrecarga en respuesta JSON
+        return Collections.emptyList();
     }
 
     @Override
