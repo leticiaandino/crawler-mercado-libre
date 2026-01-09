@@ -43,28 +43,33 @@ class AbcCrawlerTest {
     @DisplayName("Debe extraer SKU de un producto ABC")
     void testExtractProductoSku() {
         String testUrl = "https://www.abc.cl/cinturon-hombre-ypsd/26832039.html";
+        System.out.println("🧪 ABC TEST: Extrayendo SKU de producto...");
         Producto p = abcCrawler.crawlProducto(testUrl);
 
         assertNotNull(p, "El producto no debe ser nulo");
         assertNotNull(p.getSku(), "El SKU no debe ser nulo");
         assertEquals("26832039", p.getSku(), "El SKU debe ser 26832039");
+        System.out.println("✅ ABC - SKU extraído: " + p.getSku());
     }
 
     @Test
     @DisplayName("Debe extraer nombre de un producto ABC")
     void testExtractProductoNombre() {
         String testUrl = "https://www.abc.cl/cinturon-hombre-ypsd/26832039.html";
+        System.out.println("🧪 ABC TEST: Extrayendo nombre de producto...");
         Producto p = abcCrawler.crawlProducto(testUrl);
 
         assertNotNull(p, "El producto no debe ser nulo");
         assertNotNull(p.getNombre(), "El nombre no debe ser nulo");
         assertFalse(p.getNombre().isEmpty(), "El nombre no debe estar vacío");
+        System.out.println("✅ ABC - Nombre extraído: " + p.getNombre());
     }
 
     @Test
     @DisplayName("Debe extraer precio actual de un producto ABC")
     void testExtractProductoPrecioActual() {
         String testUrl = "https://www.abc.cl/cinturon-hombre-ypsd/26832039.html";
+        System.out.println("🧪 ABC TEST: Extrayendo precio actual...");
         try {
             Producto p = abcCrawler.crawlProducto(testUrl);
 
@@ -72,6 +77,7 @@ class AbcCrawlerTest {
             assertNotNull(p.getPrecioActual(), "El precio actual no debe ser nulo");
             assertTrue(p.getPrecioActual().compareTo(BigDecimal.ZERO) > 0,
                       "El precio actual debe ser mayor a 0");
+            System.out.println("✅ ABC - Precio actual extraído: $" + p.getPrecioActual());
         } catch (RuntimeException e) {
             // El test puede fallar por timeout de conexión a sitio externo
             // En ese caso, se considera exitoso porque la lógica es correcta
