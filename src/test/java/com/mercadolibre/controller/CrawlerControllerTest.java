@@ -1,6 +1,7 @@
 package com.mercadolibre.controller;
 
 import com.mercadolibre.dto.ApiResponse;
+ import com.mercadolibre.dto.CrawlerRequest;
 import com.mercadolibre.model.Producto;
 import com.mercadolibre.model.ImagenProducto;
 import com.mercadolibre.service.CrawlerService;
@@ -80,10 +81,11 @@ class CrawlerControllerTest {
     @DisplayName("Endpoint extract debe aceptar URL válida")
     void testExtractConUrlValida() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
@@ -93,10 +95,11 @@ class CrawlerControllerTest {
     @DisplayName("Endpoint extract debe retornar ApiResponse")
     void testExtractRetornaApiResponse() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
 
         assertNotNull(response.getBody());
         assertTrue(response.getBody() instanceof ApiResponse);
@@ -105,7 +108,8 @@ class CrawlerControllerTest {
     @Test
     @DisplayName("Endpoint extract debe rechazar URL vacía")
     void testExtractUrlVacia() {
-        ResponseEntity<?> response = crawlerController.extract("   ");
+        CrawlerRequest request = new CrawlerRequest("   ");
+        ResponseEntity<?> response = crawlerController.extract(request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
@@ -115,10 +119,11 @@ class CrawlerControllerTest {
     void testExtractLimpiaComillas() {
         String urlConComillas = "\"https://www.abc.cl/producto/123.html\"";
         String urlLimpia = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(urlConComillas);
 
         when(crawlerService.extraerFichaProducto(urlLimpia)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.extract(urlConComillas);
+        ResponseEntity<?> response = crawlerController.extract(request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
@@ -129,10 +134,11 @@ class CrawlerControllerTest {
     @DisplayName("Endpoint producto debe retornar ficha extraída")
     void testProductoEndpoint() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.crawlProducto(url);
+        ResponseEntity<?> response = crawlerController.crawlProducto(request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
@@ -141,10 +147,11 @@ class CrawlerControllerTest {
     @DisplayName("Producto en respuesta debe contener SKU")
     void testProductoTieneSku() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.crawlProducto(url);
+        ResponseEntity<?> response = crawlerController.crawlProducto(request);
 
         assertNotNull(response.getBody());
         // La respuesta es un ApiResponse
@@ -156,13 +163,14 @@ class CrawlerControllerTest {
     @DisplayName("Endpoint listado-productos debe retornar lista de productos")
     void testListadoProductosEndpoint() {
         String url = "https://www.abc.cl/hombre/accesorios/";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         List<Producto> mockListado = new ArrayList<>();
         mockListado.add(mockProducto);
 
         when(crawlerService.extraerListadoProductos(url)).thenReturn(mockListado);
 
-        ResponseEntity<?> response = crawlerController.crawlListadoProductos(url);
+        ResponseEntity<?> response = crawlerController.crawlListadoProductos(request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
@@ -171,11 +179,12 @@ class CrawlerControllerTest {
     @DisplayName("Listado vacío debe retornar lista vacía")
     void testListadoProductosVacio() {
         String url = "https://www.abc.cl/categoria-vacia/";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         List<Producto> mockListado = new ArrayList<>();
         when(crawlerService.extraerListadoProductos(url)).thenReturn(mockListado);
 
-        ResponseEntity<?> response = crawlerController.crawlListadoProductos(url);
+        ResponseEntity<?> response = crawlerController.crawlListadoProductos(request);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
@@ -186,11 +195,12 @@ class CrawlerControllerTest {
     @DisplayName("Debe manejar excepción en extract")
     void testExtractConExcepcion() {
         String url = "https://www.abc.cl/producto-inexistente/999.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url))
             .thenThrow(new RuntimeException("Producto no encontrado"));
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
@@ -199,11 +209,12 @@ class CrawlerControllerTest {
     @DisplayName("Debe manejar excepción en producto")
     void testProductoConExcepcion() {
         String url = "https://www.abc.cl/producto-inexistente/999.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url))
             .thenThrow(new RuntimeException("Error al procesar"));
 
-        ResponseEntity<?> response = crawlerController.crawlProducto(url);
+        ResponseEntity<?> response = crawlerController.crawlProducto(request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
@@ -212,11 +223,12 @@ class CrawlerControllerTest {
     @DisplayName("Debe manejar excepción en listado-productos")
     void testListadoConExcepcion() {
         String url = "https://www.abc.cl/categoria-error/";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerListadoProductos(url))
             .thenThrow(new RuntimeException("Error en API"));
 
-        ResponseEntity<?> response = crawlerController.crawlListadoProductos(url);
+        ResponseEntity<?> response = crawlerController.crawlListadoProductos(request);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
@@ -227,10 +239,11 @@ class CrawlerControllerTest {
     @DisplayName("Respuesta debe tener estructura ApiResponse")
     void testRespuestaHasApiResponseStructure() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
         Object body = response.getBody();
 
         assertTrue(body instanceof ApiResponse, "Respuesta debe ser ApiResponse");
@@ -240,10 +253,11 @@ class CrawlerControllerTest {
     @DisplayName("ApiResponse debe tener campo success")
     void testApiResponseTieneSuccess() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
         ApiResponse<?> apiResponse = (ApiResponse<?>) response.getBody();
 
         assertTrue(apiResponse.isSuccess());
@@ -253,10 +267,11 @@ class CrawlerControllerTest {
     @DisplayName("ApiResponse debe tener mensaje")
     void testApiResponseTieneMensaje() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
         ApiResponse<?> apiResponse = (ApiResponse<?>) response.getBody();
 
         assertNotNull(apiResponse.getMessage());
@@ -267,11 +282,12 @@ class CrawlerControllerTest {
     @DisplayName("ApiResponse error debe tener campo error")
     void testApiResponseErrorTieneError() {
         String url = "https://www.abc.cl/producto-inexistente/999.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url))
             .thenThrow(new RuntimeException("Test error"));
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
         ApiResponse<?> apiResponse = (ApiResponse<?>) response.getBody();
 
         assertFalse(apiResponse.isSuccess());
@@ -282,10 +298,11 @@ class CrawlerControllerTest {
     @DisplayName("ApiResponse debe tener timestamp")
     void testApiResponseTieneTimestamp() {
         String url = "https://www.abc.cl/producto/123.html";
+        CrawlerRequest request = new CrawlerRequest(url);
 
         when(crawlerService.extraerFichaProducto(url)).thenReturn(mockProducto);
 
-        ResponseEntity<?> response = crawlerController.extract(url);
+        ResponseEntity<?> response = crawlerController.extract(request);
         ApiResponse<?> apiResponse = (ApiResponse<?>) response.getBody();
 
         assertTrue(apiResponse.getTimestamp() > 0);

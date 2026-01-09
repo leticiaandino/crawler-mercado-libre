@@ -1,6 +1,7 @@
 package com.mercadolibre.controller;
 
 import com.mercadolibre.dto.ApiResponse;
+import com.mercadolibre.dto.CrawlerRequest;
 import com.mercadolibre.model.Producto;
 import com.mercadolibre.model.ImagenProducto;
 import com.mercadolibre.service.CrawlerService;
@@ -36,13 +37,14 @@ public class CrawlerController {
      *
      * Ejemplos:
      * POST /api/crawler/extract
-     * Body: https://www.mercadolibre.com.ar/sierra/p/MLA123        (Ficha ML)
-     * Body: https://www.paris.cl/tecnologia/celulares/smartphone/  (Listado Paris)
-     * Body: https://www.abc.cl/hombre/accesorios/                  (Listado ABC)
+     * Body JSON: { "url": "https://www.mercadolibre.com.ar/sierra/p/MLA123" }
+     * Body JSON: { "url": "https://www.paris.cl/tecnologia/celulares/smartphone/" }
+     * Body JSON: { "url": "https://www.abc.cl/hombre/accesorios/" }
      */
     @PostMapping("/extract")
-    public ResponseEntity<?> extract(@RequestBody String url) {
+    public ResponseEntity<?> extract(@RequestBody CrawlerRequest request) {
         try {
+            String url = request.getUrl();
             String cleanUrl = url.trim().replace("\"", "");
 
             if (cleanUrl == null || cleanUrl.isEmpty()) {
@@ -81,9 +83,9 @@ public class CrawlerController {
      */
     @PostMapping("/producto")
     @Deprecated
-    public ResponseEntity<?> crawlProducto(@RequestBody String url) {
+    public ResponseEntity<?> crawlProducto(@RequestBody CrawlerRequest request) {
         logger.warn("Endpoint /api/crawler/producto está DEPRECADO. Usar /api/crawler/extract en su lugar");
-        return extract(url);
+        return extract(request);
     }
 
     /**
@@ -94,9 +96,9 @@ public class CrawlerController {
      */
     @PostMapping("/listado-productos")
     @Deprecated
-    public ResponseEntity<?> crawlListadoProductos(@RequestBody String url) {
+    public ResponseEntity<?> crawlListadoProductos(@RequestBody CrawlerRequest request) {
         logger.warn("Endpoint /api/crawler/listado-productos está DEPRECADO. Usar /api/crawler/extract en su lugar");
-        return extract(url);
+        return extract(request);
     }
 
     // ==================== MÉTODOS PRIVADOS ====================

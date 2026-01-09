@@ -90,12 +90,14 @@ Verifica que el servicio está activo.
 Crawler service is running
 ```
 
-### ✅ Extracción de Ficha Individual
+### ✅ Extracción de Ficha Individual (Producto)
 ```
 POST /api/crawler/extract
-Content-Type: text/plain
+Content-Type: application/json
 
-URL_DEL_PRODUCTO
+{
+  "url": "URL_DEL_PRODUCTO"
+}
 ```
 
 **Ejemplos de uso:**
@@ -103,23 +105,36 @@ URL_DEL_PRODUCTO
 **1. Extraer ficha MercadoLibre (✅ FUNCIONA)**
 ```bash
 curl -X POST http://localhost:8080/api/crawler/extract \
-  -H "Content-Type: text/plain" \
-  -d "https://www.mercadolibre.com.ar/sierra-circular-7-14-185-190mm-1600w-hs7010-makita/p/MLA19813486"
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.mercadolibre.com.ar/sierra-circular-7-14-185-190mm-1600w-hs7010-makita/p/MLA19813486"}'
 ```
 
 **2. Extraer ficha ABC.cl (✅ FUNCIONA)**
 ```bash
 curl -X POST http://localhost:8080/api/crawler/extract \
-  -H "Content-Type: text/plain" \
-  -d "https://www.abc.cl/notebook-gamer-asus-tuf-gaming-a15-fa506nc-hn002w%C2%A0amd-ryzen-5-8gb-512gb-ssd-156-nvidia-rtx-3050/28518471.html"
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.abc.cl/notebook-gamer-asus-tuf-gaming-a15-fa506nc-hn002w%C2%A0amd-ryzen-5-8gb-512gb-ssd-156-nvidia-rtx-3050/28518471.html"}'
+```
+
+**JavaScript/Fetch:**
+```javascript
+fetch('http://localhost:8080/api/crawler/extract', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    url: 'https://www.abc.cl/soundbar-b-series-hw-b450f-2.1-subwoofer-2025/28811284.html'
+  })
+}).then(r => r.json()).then(console.log);
 ```
 
 ### ✅ Extracción de Listado por Categoría
 ```
 POST /api/crawler/listado-productos
-Content-Type: text/plain
+Content-Type: application/json
 
-URL_DE_CATEGORIA
+{
+  "url": "URL_DE_CATEGORIA"
+}
 ```
 
 **Ejemplos de uso:**
@@ -127,15 +142,43 @@ URL_DE_CATEGORIA
 **1. Extraer listado Paris.cl (✅ FUNCIONA)**
 ```bash
 curl -X POST http://localhost:8080/api/crawler/listado-productos \
-  -H "Content-Type: text/plain" \
-  -d "https://www.paris.cl/tecnologia/celulares/smartphone/"
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.paris.cl/tecnologia/celulares/smartphone/"}'
 ```
 
 **2. Extraer listado ABC.cl (✅ FUNCIONA)**
 ```bash
 curl -X POST http://localhost:8080/api/crawler/listado-productos \
-  -H "Content-Type: text/plain" \
-  -d "https://www.abc.cl/mochila-hidratacion-national-geographic-yakima-12-lts-azul-hng1121/21673269.html"
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.abc.cl/mochila-hidratacion-national-geographic-yakima-12-lts-azul-hng1121/21673269.html"}'
+```
+
+**JavaScript/Fetch:**
+```javascript
+fetch('http://localhost:8080/api/crawler/listado-productos', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    url: 'https://www.paris.cl/tecnologia/celulares/smartphone/'
+  })
+}).then(r => r.json()).then(console.log);
+```
+
+### ✅ Extracción de Categoría Paris.cl
+```
+POST /api/crawler/categoria
+Content-Type: application/json
+
+{
+  "url": "URL_DE_CATEGORIA_PARIS"
+}
+```
+
+**Ejemplo de uso:**
+```bash
+curl -X POST http://localhost:8080/api/crawler/categoria \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.paris.cl/tecnologia/celulares/smartphone/"}'
 ```
 
 **Response (Ficha exitosa):**

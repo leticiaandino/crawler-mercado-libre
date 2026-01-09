@@ -1,5 +1,6 @@
 package com.mercadolibre.controller;
 
+import com.mercadolibre.dto.CrawlerRequest;
 import com.mercadolibre.model.Categoria;
 import com.mercadolibre.service.ParisCategoryService;
 import lombok.RequiredArgsConstructor;
@@ -16,10 +17,10 @@ public class CategoryController {
     private final ParisCategoryService categoryService;
 
     @PostMapping("/categoria")
-    public ResponseEntity<?> extractCategory(@RequestBody Map<String, String> request) {
+    public ResponseEntity<?> extractCategory(@RequestBody CrawlerRequest request) {
         try {
-            String categoryUrl = request.get("url");
-            
+            String categoryUrl = request.getUrl();
+
             if (categoryUrl == null || !categoryUrl.contains("paris.cl")) {
                 return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
