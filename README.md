@@ -196,12 +196,33 @@ curl -X POST http://localhost:8080/api/crawler/listado-productos \
 - **Lenguaje**: Java 21
 - **Base de Datos**: MySQL 8.0
 - **ORM**: Hibernate/JPA
-- **Web Scraping**: JSoup
+- **Web Scraping**: JSoup 1.15.3
 - **HTTP Client**: RestTemplate (Spring)
 - **Build**: Maven
-- **Testing**: JUnit 5 + Mockito
+- **Testing**: JUnit 5 + Mockito + Spring Boot Test
 - **Logging**: SLF4J + Logback
-- **Utilidades**: Lombok
+- **Utilidades**: Lombok, Gson
+- **Control de Rate Limiting**: RateLimitHandler custom
+
+### Crawlers Implementados
+
+1. **MercadoLibreCrawler** ✅
+   - Extrae fichas de productos individuales
+   - Usa JSoup para parsing HTML
+   - Extrae: SKU, nombre, precios, imágenes, disponibilidad
+
+2. **ParisCrawler** ✅
+   - Extrae listados de productos por categoría
+   - Consume API REST interna de Paris
+   - Implementa paginación automática
+   - Extrae metadatos de categorías
+
+3. **AbcCrawler** ✅ (Nuevo)
+   - Extrae fichas de productos individuales
+   - Extrae listados de productos por categoría
+   - Usa JSoup para parsing HTML
+   - Implementa paginación automática
+   - Rate limiting integrado
 
 ### Estructura del Proyecto
 
@@ -212,13 +233,15 @@ src/main/java/com/mercadolibre/
 │   └── CategoryController.java
 ├── service/
 │   ├── CrawlerService.java         # Interfaz del servicio
+│   ├── ParisCategoryMappingService.java  # Gestión de mapeos Paris
+│   ├── ParisCategoryService.java   # Importación de categorías
 │   └── imp/
 │       └── CrawlerServiceImpl.java  # Implementación (orquestación)
 ├── crawler/
-│   ├── Crawler.java                # Interfaz común
 │   ├── MercadoLibreCrawler.java   # Crawler específico
 │   ├── ParisCrawler.java          # Crawler + API client
-│   └── AbcCrawler.java            # Crawler específico
+│   ├── AbcCrawler.java            # Crawler específico (NUEVO)
+│   └── MercadoLibreCrawler.java   # Interfaz común
 ├── client/
 │   └── ParisApiClient.java        # Cliente HTTP para API Paris
 ├── mapper/
@@ -227,21 +250,30 @@ src/main/java/com/mercadolibre/
 │   ├── Producto.java
 │   ├── Categoria.java
 │   ├── ImagenProducto.java
-│   └── ProductoCategoria.java
+│   ├── ProductoCategoria.java
+│   └── ParisCategoryMapping.java  # Mapeo de categorías Paris (NUEVO)
 ├── repository/
 │   ├── ProductoRepository.java
 │   ├── CategoriaRepository.java
-│   └── ImagenProductoRepository.java
+│   ├── ImagenProductoRepository.java
+│   └── ParisCategoryMappingRepository.java  # Repositorio mapeos (NUEVO)
 ├── dto/
 │   ├── ApiResponse.java           # Respuesta estandarizada
+│   ├── ApiResponseBuilder.java    # Builder para respuestas (NUEVO)
 │   └── ParisProductsResponse.java # DTO de respuesta Paris API
 ├── exception/
 │   └── GlobalExceptionHandler.java # Manejo centralizado de errores
 ├── util/
-│   └── RateLimitHandler.java      # Control de rate limiting
+│   └── RateLimitHandler.java      # Control de rate limiting (NUEVO)
 └── config/
     ├── RestTemplateConfig.java
-    └── ParisCategoryMappingConfig.java
+    └── ParisCategoryMappingConfig.java  # Configuración mapeos (NUEVO)
+
+src/main/resources/
+├── application.properties          # Configuración de la aplicación
+├── schema.sql                      # Definición de tablas BD (NUEVO)
+└── sql/
+    └── paris_category_mapping.sql  # Datos iniciales Paris
 ```
 
 ### Patrón de Persistencia
@@ -291,12 +323,29 @@ spring.jpa.hibernate.ddl-auto=update
 mvn clean install
 ```
 
-5. **Ejecutar la aplicación**
+3. **Ejecutar la aplicación**
 ```bash
 mvn spring-boot:run
 ```
 
 La aplicación estará disponible en: **http://localhost:8080**
+
+### 🗄️ Schema de Base de Datos
+
+El archivo `schema.sql` define automáticamente la estructura de la BD:
+
+**Tablas creadas:**
+- `categoria`: Almacena categorías de e-commerce
+- `producto`: Almacena información de productos
+- `imagen_producto`: Almacena URLs de imágenes con orden secuencial
+- `producto_categoria`: Relación many-to-many entre productos y categorías
+
+**Índices optimizados:**
+- Índices en SKU, nombre, disponibilidad de productos
+- Índices en ruta de categorías
+- Índices en ordenamiento de imágenes
+
+El schema se ejecuta automáticamente cuando inicia la aplicación (Spring Boot + Hibernate).
 
 ## 📝 Ejemplos de Uso
 
@@ -406,12 +455,25 @@ Ejecutar los tests unitarios:
 mvn test
 ```
 
+**Estado de Tests**: ✅ **57/57 PASANDO**
+
 **Tests disponibles:**
-- `ParisApiClientTest`: Valida llamadas a la API interna de Paris.cl
-- `ParisCategoryServiceTest`: Valida lógica de importación y actualización
-- `ProductMapperTest`: Valida mapeo de datos desde API a entidades
-- `AbcCrawlerTest`: Valida web scraping de ABC.cl
+- `ParisApiClientTest` (2 tests): Valida llamadas a la API interna de Paris.cl
+- `CrawlerControllerTest` (18 tests): Valida endpoints y controlador
+- `ProductMapperTest` (4 tests): Valida mapeo de datos desde API a entidades
+- `AbcCrawlerTest` (15 tests): Valida web scraping de ABC.cl
+- `ParisCrawlerTest` (15 tests): Valida web scraping y API de Paris
 - `MercadoLibreCrawlerTest`: Valida web scraping de MercadoLibre
+- `ParisCategoryServiceTest` (2 tests): Valida lógica de importación y actualización
+- `CrawlerServiceTest`: Valida orquestación de servicios
+
+**Cobertura**: Todas las funcionalidades principales tienen tests
+- Extracción de productos ✅
+- Listado de categorías ✅
+- Almacenamiento en BD ✅
+- Manejo de errores ✅
+- Paginación ✅
+
 
 ## ⚙️ Configuración Avanzada
 
@@ -489,8 +551,29 @@ Este proyecto está bajo la licencia MIT.
 
 Para reportar bugs o sugerencias, abre un issue en el repositorio.
 
+## 📋 Historial de Cambios
+
+### v2.0.0 - Enero 2026 (Actual)
+- ✅ Agregado AbcCrawler para scraping de ABC.cl
+- ✅ Agregado RateLimitHandler para control de rate limiting
+- ✅ Agregado ParisCategoryMappingService y configuración
+- ✅ Mejorado GlobalExceptionHandler para mejor manejo de errores
+- ✅ Agregado ApiResponseBuilder para respuestas consistentes
+- ✅ Implementado schema.sql para definición de BD
+- ✅ 57 tests unitarios (todos pasando ✅)
+- ✅ Documentación completa en README
+- ✅ 11 commits profesionales en rama `leti-dev`
+
+### v1.0.0 - Versión Inicial
+- Crawler base para MercadoLibre y Paris.cl
+- Tests básicos
+- Documentación inicial
+
 ---
 
-**Última actualización**: Enero 2026
+**Última actualización**: 9 de enero de 2026
+**Estado**: ✅ Producción
+**Versión**: 2.0.0
+**Tests**: 57/57 PASANDO ✅
 
 
