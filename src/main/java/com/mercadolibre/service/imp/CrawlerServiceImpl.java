@@ -2,6 +2,7 @@ package com.mercadolibre.service.imp;
 
 import com.mercadolibre.crawler.MercadoLibreCrawler;
 import com.mercadolibre.crawler.ParisCrawler;
+import com.mercadolibre.crawler.AbcCrawler;
 import com.mercadolibre.model.*;
 import com.mercadolibre.repository.*;
 import com.mercadolibre.service.CrawlerService;
@@ -27,6 +28,9 @@ public class CrawlerServiceImpl implements CrawlerService {
     
     @Autowired
     private ParisCrawler parisCrawler;
+    
+    @Autowired
+    private AbcCrawler abcCrawler;
 
     @Autowired
     private ProductoRepository productoRepository;
@@ -48,6 +52,8 @@ public class CrawlerServiceImpl implements CrawlerService {
             producto = mercadoLibreCrawler.crawlProducto(url);
         } else if (url.contains("paris.cl")) {
             producto = parisCrawler.crawlProducto(url);
+        } else if (url.contains("abc.cl")) {
+            producto = abcCrawler.crawlProducto(url);
         } else {
             throw new IllegalArgumentException("URL no soportada: " + url);
         }
@@ -68,14 +74,21 @@ public class CrawlerServiceImpl implements CrawlerService {
 
     @Override
     public List<Producto> extraerListadoProductos(String urlCategoria) {
-        urlCategoria = urlCategoria.trim(); // ✅ limpiar espacios
+        urlCategoria = urlCategoria.trim();
 
-        if (!urlCategoria.contains("paris.cl")) {
-            throw new IllegalArgumentException("Solo se soporta crawling de Paris");
+        // Determinar qué crawler usar
+        if (!urlCategoria.contains("paris.cl") && !urlCategoria.contains("abc.cl")) {
+            throw new IllegalArgumentException("Solo se soporta crawling de Paris y ABC. URL recibida: " + urlCategoria);
         }
 
-        // 1. Obtener metadata
-        Categoria categoria = parisCrawler.crawlMetadataCategoria(urlCategoria);
+        // 1. Obtener metadata según el sitio
+        Categoria categoria;
+        if (urlCategoria.contains("paris.cl")) {
+            categoria = parisCrawler.crawlMetadataCategoria(urlCategoria);
+        } else {
+            categoria = abcCrawler.crawlMetadataCategoria(urlCategoria);
+        }
+
         logger.info("Metadata obtenida del crawler: {} páginas", categoria.getCantidadPaginas());
         
         Optional<Categoria> existingCatOpt = categoriaRepository.findByRuta(categoria.getRuta());
@@ -95,11 +108,18 @@ public class CrawlerServiceImpl implements CrawlerService {
         }
 
         int totalProductosExtraidos = 0;
+        List<Producto> todosLosProductos = new ArrayList<>();
 
         // 2. Iterar páginas (0-based)
         for (int pagina = 0; pagina < savedCategoria.getCantidadPaginas(); pagina++) {
             logger.info("Extrayendo página {} de {}", pagina, savedCategoria.getCantidadPaginas());
-            List<Producto> productosPagina = parisCrawler.crawlListadoProductos(urlCategoria, pagina, savedCategoria.getCantidadPaginas());
+
+            List<Producto> productosPagina;
+            if (urlCategoria.contains("paris.cl")) {
+                productosPagina = parisCrawler.crawlListadoProductos(urlCategoria, pagina, savedCategoria.getCantidadPaginas());
+            } else {
+                productosPagina = abcCrawler.crawlListadoProductos(urlCategoria, pagina, savedCategoria.getCantidadPaginas());
+            }
 
             if (productosPagina.isEmpty()) {
                 logger.warn("Página {} vacía. Deteniendo.", pagina);
@@ -135,11 +155,11 @@ public class CrawlerServiceImpl implements CrawlerService {
 
             productoCategoriaRepository.saveAll(relaciones);
             totalProductosExtraidos += productosPagina.size();
+            todosLosProductos.addAll(savedProductos);
         }
 
         logger.info("Extracción completada: {} productos", totalProductosExtraidos);
-        // Devolver lista vacía para evitar sobrecarga en respuesta JSON
-        return Collections.emptyList();
+        return todosLosProductos;
     }
 
     @Override
@@ -148,6 +168,8 @@ public class CrawlerServiceImpl implements CrawlerService {
             return mercadoLibreCrawler.crawlMetadataCategoria(urlCategoria);
         } else if (urlCategoria.contains("paris.cl")) {
             return parisCrawler.crawlMetadataCategoria(urlCategoria);
+        } else if (urlCategoria.contains("abc.cl")) {
+            return abcCrawler.crawlMetadataCategoria(urlCategoria);
         } else {
             throw new IllegalArgumentException("URL de categoría no soportada: " + urlCategoria);
         }
@@ -170,4 +192,5 @@ public class CrawlerServiceImpl implements CrawlerService {
         
         return normalized;
     }
+
 }
