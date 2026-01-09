@@ -92,12 +92,14 @@ class MercadoLibreCrawlerTest {
     @Test
     @DisplayName("Debe normalizar URL removiendo query parameters")
     void testNormalizeMercadoLibreUrlWithQuery() {
+        System.out.println("🧪 MERCADOLIBRE TEST: Normalizando URL removiendo query parameters...");
         String url = "https://www.mercadolibre.com.ar/producto/p/MLA123?param=value#section";
 
         String normalized = normalizeUrlReflection(url);
 
         assertFalse(normalized.contains("?"));
         assertFalse(normalized.contains("#"));
+        System.out.println("✅ URL normalizada: " + normalized);
     }
 
     @Test
