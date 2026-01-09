@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mercadolibre.model.Categoria;
 import com.mercadolibre.model.ImagenProducto;
 import com.mercadolibre.model.Producto;
+import com.mercadolibre.util.RateLimitHandler;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -27,6 +29,9 @@ public class MercadoLibreCrawler implements Crawler {
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @Autowired
+    private RateLimitHandler rateLimitHandler;
+
     private String normalizeMercadoLibreUrl(String url) {
         if (url == null) return null;
         return url.split("[?#]")[0];
@@ -35,7 +40,18 @@ public class MercadoLibreCrawler implements Crawler {
     @Override
     public Producto crawlProducto(String url) {
         try {
+            // Validar URL
+            if (url == null || url.trim().isEmpty()) {
+                throw new IllegalArgumentException("URL no puede estar vacía");
+            }
+
             url = normalizeMercadoLibreUrl(url.trim());
+
+            // Aplicar rate limiting antes de hacer el request
+            logger.debug("Aplicando rate limiting para: {}", url);
+            rateLimitHandler.waitBeforeRequest(url);
+
+            logger.debug("Conectando a: {}", url);
             Document doc = Jsoup.connect(url).userAgent(USER_AGENT).get();
             logger.debug("URL final cargada por Jsoup: {}", doc.location());
 
@@ -107,7 +123,7 @@ public class MercadoLibreCrawler implements Crawler {
                 if (pictures.isArray()) {
                     for (JsonNode picture : pictures) {
                         String id = picture.path("id").asText("").trim();
-                        if (!id.isEmpty() && seenIds.add(id)) { // add() devuelve false si ya existía
+                        if (!id.isEmpty() && seenIds.add(id)) {
                             String cleanId = id.replaceAll("\\s+", "");
                             String imgUrl = "https://http2.mlstatic.com/D_NQ_NP_" + cleanId + "-O.webp";
                             imagenesUrls.add(imgUrl);
@@ -139,8 +155,11 @@ public class MercadoLibreCrawler implements Crawler {
 
             return producto;
 
+        } catch (IOException e) {
+            logger.error("Error de conexión: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al conectar con: " + url, e);
         } catch (Exception e) {
-            logger.error("Error al extraer datos: {}", e.getMessage());
+            logger.error("Error al extraer datos: {}", e.getMessage(), e);
             throw new RuntimeException("Error al scrapear producto: " + url, e);
         }
     }
