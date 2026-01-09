@@ -32,9 +32,8 @@ public class Producto {
     @Column(name = "precio_anterior", precision = 12, scale = 2)
     private BigDecimal precioAnterior;
 
-    @Column(name = "disponibilidad", nullable = false, length = 50)
-    private String disponibilidad = "stock_disponible"; // Valores: stock_disponible, ultima_unidad, agotado
-
+    @Column(name = "disponibilidad", nullable = true, length = 50)
+    private String disponibilidad = "stock_disponible";
     @Lob
     @Column(name = "url_ficha", nullable = false)
     private String urlFicha;
